@@ -6,3 +6,6 @@
 *.tfstate
 *.tfstate.*
 crash.log
+# Saved plan files can embed sensitive var values (e.g. connection_key).
+tfplan
+*.tfplan
