@@ -335,10 +335,69 @@ resource "dataversecontact_table" "case" {
   }
 }
 
+# ── project (msdyn_project) ─────────────────────────────────────────────────
+# Delivery projects (Project Operations). msdyn_project links only to the
+# customer *account* (msdyn_customer) — there is no project→contact field — so:
+#   me   = projects for the account you're the primary contact of (2-hop:
+#          project → customer account → account.primarycontactid = you)
+#   team = every project for your company's account
+# Read-only: customers view delivery status, they don't author projects.
+resource "dataversecontact_table" "project" {
+  scope                  = var.scope
+  route_name             = "project"
+  description            = "Delivery projects — for the account you're the primary contact of (me) and your company's (team)"
+  dataverse_table        = "msdyn_projects"
+  dataverse_logical_name = "msdyn_project"
+  primary_key            = "msdyn_projectid"
+  required_permission    = "project"
+  filters                = ["statecode eq 0"]
+  aliases                = ["projects", "msdyn_projects"]
+
+  default_select = [
+    "msdyn_projectid", "msdyn_subject", "msdyn_scheduledstart", "msdyn_finish",
+    "statecode", "statuscode", "createdon", "modifiedon",
+  ]
+
+  lookup_fields          = ["msdyn_subject"]
+  lookup_search_contains = ["msdyn_subject"]
+
+  # me: project → customer account → its primary contact (two-hop)
+  contact_join_step {
+    table = "accounts"
+    from  = "msdyn_customer"
+    key   = "accountid"
+  }
+  contact_join_step {
+    table = "contacts"
+    from  = "primarycontactid"
+    key   = "contactid"
+  }
+
+  # team: project → customer account
+  team_join_step {
+    table = "accounts"
+    from  = "msdyn_customer"
+    key   = "accountid"
+  }
+
+  fields = {
+    msdyn_projectid      = { type = "string", description = "Unique project identifier", read_only = true }
+    msdyn_subject        = { type = "string", description = "Project name" }
+    msdyn_description    = { type = "string", description = "Description" }
+    msdyn_scheduledstart = { type = "datetime", description = "Scheduled start" }
+    msdyn_finish         = { type = "datetime", description = "Scheduled finish" }
+    msdyn_customer       = { type = "lookup", description = "Customer (account)", lookup_table = "account", read_only = true }
+    statecode            = { type = "choice", description = "Status", read_only = true }
+    statuscode           = { type = "choice", description = "Status reason", read_only = true }
+    createdon            = { type = "datetime", description = "Date created", read_only = true }
+    modifiedon           = { type = "datetime", description = "Date last modified", read_only = true }
+  }
+}
+
 # ── Permission sync ─────────────────────────────────────────────────────────
 # Customer self-service portal: the customer manages only their own identity
 # and raises support cases. Everything about Redcentric's sales/delivery
-# relationship (accounts, opportunities, quotes) is READ-ONLY.
+# relationship (accounts, opportunities, quotes, projects) is READ-ONLY.
 resource "dataversecontact_permissions_sync" "rcportal" {
   scope = var.scope
 
@@ -347,6 +406,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     account     = ["me", "team"]                    # read-only
     opportunity = ["me", "team"]                    # read-only (vendor's pipeline)
     quote       = ["me", "team"]                    # read-only (vendor-issued)
+    project     = ["me", "team"]                    # read-only (delivery status)
     case        = ["me", "team", "write", "create"] # raise + view + update own tickets
   }
 
@@ -356,6 +416,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
       dataversecontact_table.account.id,
       dataversecontact_table.opportunity.id,
       dataversecontact_table.quote.id,
+      dataversecontact_table.project.id,
       dataversecontact_table.case.id,
     ]))
   }
@@ -365,6 +426,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     dataversecontact_table.account,
     dataversecontact_table.opportunity,
     dataversecontact_table.quote,
+    dataversecontact_table.project,
     dataversecontact_table.case,
   ]
 }

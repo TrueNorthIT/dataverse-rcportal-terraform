@@ -9,6 +9,7 @@ output "published_tables" {
       dataversecontact_table.account,
       dataversecontact_table.opportunity,
       dataversecontact_table.quote,
+      dataversecontact_table.project,
       dataversecontact_table.case,
       ] : t.route_name => {
       id              = t.id
