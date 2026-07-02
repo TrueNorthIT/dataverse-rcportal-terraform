@@ -361,12 +361,12 @@ resource "dataversecontact_table" "project" {
   lookup_fields          = ["msdyn_subject"]
   lookup_search_contains = ["msdyn_subject"]
 
-  # Account link is the custom `new_accountid` lookup (the seed data populates
-  # it; `msdyn_customer` exists natively but is null on the seeded projects).
+  # Account link is the native `msdyn_customer` lookup (nav property matches its
+  # logical name — the seed data populates it).
   # me: project → customer account → its primary contact (two-hop)
   contact_join_step {
     table = "accounts"
-    from  = "new_accountid"
+    from  = "msdyn_customer"
     key   = "accountid"
   }
   contact_join_step {
@@ -378,7 +378,7 @@ resource "dataversecontact_table" "project" {
   # team: project → customer account
   team_join_step {
     table = "accounts"
-    from  = "new_accountid"
+    from  = "msdyn_customer"
     key   = "accountid"
   }
 
@@ -388,8 +388,7 @@ resource "dataversecontact_table" "project" {
     msdyn_description    = { type = "string", description = "Description" }
     msdyn_scheduledstart = { type = "datetime", description = "Scheduled start" }
     msdyn_finish         = { type = "datetime", description = "Scheduled finish" }
-    # new_accountid (custom account lookup) is used in the join steps only —
-    # not declared here (the API drops custom nav props from the fields map).
+    msdyn_customer       = { type = "lookup", description = "Customer (account)", lookup_table = "account", read_only = true }
     statecode            = { type = "choice", description = "Status", read_only = true }
     statuscode           = { type = "choice", description = "Status reason", read_only = true }
     createdon            = { type = "datetime", description = "Date created", read_only = true }
