@@ -413,6 +413,11 @@ resource "dataversecontact_table" "site" {
   required_permission    = "site"
   aliases                = ["sites", "locations", "customeraddress"]
 
+  # customeraddress has no statecode, so override the default ["statecode eq 0"]
+  # filter. `name ne null` also cleanly hides the auto-created address1/address2
+  # rows (null name), leaving just the real named sites.
+  filters = ["name ne null"]
+
   default_select = [
     "customeraddressid", "name", "line1", "city", "postalcode",
     "addresstypecode", "createdon",
