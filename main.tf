@@ -361,10 +361,12 @@ resource "dataversecontact_table" "project" {
   lookup_fields          = ["msdyn_subject"]
   lookup_search_contains = ["msdyn_subject"]
 
+  # Account link is the custom `new_accountid` lookup (the seed data populates
+  # it; `msdyn_customer` exists natively but is null on the seeded projects).
   # me: project → customer account → its primary contact (two-hop)
   contact_join_step {
     table = "accounts"
-    from  = "msdyn_customer"
+    from  = "new_accountid"
     key   = "accountid"
   }
   contact_join_step {
@@ -376,7 +378,7 @@ resource "dataversecontact_table" "project" {
   # team: project → customer account
   team_join_step {
     table = "accounts"
-    from  = "msdyn_customer"
+    from  = "new_accountid"
     key   = "accountid"
   }
 
@@ -386,7 +388,8 @@ resource "dataversecontact_table" "project" {
     msdyn_description    = { type = "string", description = "Description" }
     msdyn_scheduledstart = { type = "datetime", description = "Scheduled start" }
     msdyn_finish         = { type = "datetime", description = "Scheduled finish" }
-    msdyn_customer       = { type = "lookup", description = "Customer (account)", lookup_table = "account", read_only = true }
+    # new_accountid (custom account lookup) is used in the join steps only —
+    # not declared here (the API drops custom nav props from the fields map).
     statecode            = { type = "choice", description = "Status", read_only = true }
     statuscode           = { type = "choice", description = "Status reason", read_only = true }
     createdon            = { type = "datetime", description = "Date created", read_only = true }
@@ -394,10 +397,65 @@ resource "dataversecontact_table" "project" {
   }
 }
 
+# ── site (customeraddress) ──────────────────────────────────────────────────
+# Customer locations/premises. `site` (Field Service) is Microsoft-locked and
+# has no account link, so sites are modelled on customeraddress — the native
+# "More Addresses" table that parents to account via `parentid`.
+#   me   = locations of the account you're the primary contact of (2-hop)
+#   team = every location for your company's account
+# Read-only: customers view their sites, they don't author them here.
+resource "dataversecontact_table" "site" {
+  scope                  = var.scope
+  route_name             = "site"
+  description            = "Customer sites — your company's locations/premises"
+  dataverse_table        = "customeraddresses"
+  dataverse_logical_name = "customeraddress"
+  primary_key            = "customeraddressid"
+  required_permission    = "site"
+  aliases                = ["sites", "locations", "customeraddress"]
+
+  default_select = [
+    "customeraddressid", "name", "line1", "city", "postalcode",
+    "addresstypecode", "createdon",
+  ]
+
+  lookup_fields          = ["name", "city"]
+  lookup_search_contains = ["name", "city"]
+
+  # me: site → parent account → its primary contact (two-hop)
+  contact_join_step {
+    table = "accounts"
+    from  = "parentid_account"
+    key   = "accountid"
+  }
+  contact_join_step {
+    table = "contacts"
+    from  = "primarycontactid"
+    key   = "contactid"
+  }
+
+  # team: site → parent account
+  team_join_step {
+    table = "accounts"
+    from  = "parentid_account"
+    key   = "accountid"
+  }
+
+  fields = {
+    customeraddressid = { type = "string", description = "Unique site identifier", read_only = true }
+    name              = { type = "string", description = "Site name" }
+    line1             = { type = "string", description = "Address line 1" }
+    city              = { type = "string", description = "City" }
+    postalcode        = { type = "string", description = "Postcode" }
+    addresstypecode   = { type = "choice", description = "Address type" }
+    createdon         = { type = "datetime", description = "Date created", read_only = true }
+  }
+}
+
 # ── Permission sync ─────────────────────────────────────────────────────────
 # Customer self-service portal: the customer manages only their own identity
 # and raises support cases. Everything about Redcentric's sales/delivery
-# relationship (accounts, opportunities, quotes, projects) is READ-ONLY.
+# relationship (accounts, opportunities, quotes, projects, sites) is READ-ONLY.
 resource "dataversecontact_permissions_sync" "rcportal" {
   scope = var.scope
 
@@ -408,6 +466,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     quote       = ["me", "team"]                    # read-only (vendor-issued)
     project     = ["me", "team"]                    # read-only (delivery status)
     case        = ["me", "team", "write", "create"] # raise + view + update own tickets
+    site        = ["me", "team"]                    # read-only (locations)
   }
 
   triggers = {
@@ -418,6 +477,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
       dataversecontact_table.quote.id,
       dataversecontact_table.project.id,
       dataversecontact_table.case.id,
+      dataversecontact_table.site.id,
     ]))
   }
 
@@ -428,5 +488,6 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     dataversecontact_table.quote,
     dataversecontact_table.project,
     dataversecontact_table.case,
+    dataversecontact_table.site,
   ]
 }
