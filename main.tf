@@ -31,7 +31,7 @@ resource "dataversecontact_table" "contact" {
   default_select = [
     "contactid", "fullname", "firstname", "lastname", "emailaddress1",
     "jobtitle", "telephone1", "mobilephone", "address1_city",
-    "createdon", "modifiedon",
+    "donotbulkemail", "createdon", "modifiedon",
   ]
 
   lookup_fields          = ["fullname", "emailaddress1"]
@@ -80,6 +80,7 @@ resource "dataversecontact_table" "contact" {
     address1_city       = { type = "string", description = "City" }
     address1_postalcode = { type = "string", description = "Postcode" }
     address1_country    = { type = "string", description = "Country" }
+    donotbulkemail      = { type = "boolean", description = "Opted out of marketing email" }
     # Note: parentcustomerid_account (the company link) is a polymorphic
     # navigation property, not a scalar column — it's used in team_join_step +
     # expand below, but must NOT be declared here (the API drops it, which
