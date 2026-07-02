@@ -11,6 +11,7 @@ output "published_tables" {
       dataversecontact_table.quote,
       dataversecontact_table.project,
       dataversecontact_table.case,
+      dataversecontact_table.site,
       ] : t.route_name => {
       id              = t.id
       dataverse_table = t.dataverse_table
