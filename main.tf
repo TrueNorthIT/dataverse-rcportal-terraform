@@ -228,6 +228,10 @@ resource "dataversecontact_table" "quote" {
   primary_key            = "quoteid"
   required_permission    = "quote"
   aliases                = ["quotes"]
+  # Show quotes in every state (Draft/Active/Won/Closed), not just the provider
+  # default of statecode eq 0 (Draft) — a customer should see their issued and
+  # active quotes, and the portal's status pills do the filtering.
+  filters = []
 
   default_select = [
     "quoteid", "name", "quotenumber", "totalamount",
