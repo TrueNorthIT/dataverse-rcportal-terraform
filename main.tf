@@ -403,7 +403,10 @@ resource "dataversecontact_table" "casenotes" {
     annotationid   = { type = "string", description = "Unique note identifier", read_only = true }
     subject        = { type = "string", description = "Note subject" }
     notetext       = { type = "string", description = "Note text" }
-    objectid       = { type = "lookup", description = "Regarding case", read_only = true }
+    # Writable so the portal can add a note to a case: sending `objectid: <caseId>`
+    # binds via objectid_incident → /incidents(id). entitySet is derived from
+    # lookup_table ("case" → incidents).
+    objectid       = { type = "lookup", description = "Regarding case", lookup_table = "case", bind_field = "objectid_incident" }
     objecttypecode = { type = "string", description = "Regarding entity type", read_only = true }
     isdocument     = { type = "boolean", description = "Has attachment", read_only = true }
     createdon      = { type = "datetime", description = "Date created", read_only = true }
