@@ -290,9 +290,12 @@ resource "dataversecontact_table" "case" {
   filters                = ["statecode eq 0"]
   aliases                = ["cases", "incidents", "tickets"]
 
+  # `description` must be here: the single-record GET uses default_select (it
+  # ignores the client's ?select), so without it the case detail description
+  # came back empty even though the list showed it.
   default_select = [
     "incidentid", "title", "ticketnumber", "prioritycode",
-    "statecode", "statuscode", "createdon", "modifiedon",
+    "statecode", "statuscode", "description", "createdon", "modifiedon",
   ]
 
   lookup_fields          = ["title", "ticketnumber"]
@@ -403,7 +406,9 @@ resource "dataversecontact_table" "casenotes" {
     annotationid   = { type = "string", description = "Unique note identifier", read_only = true }
     subject        = { type = "string", description = "Note subject" }
     notetext       = { type = "string", description = "Note text" }
-    objectid       = { type = "lookup", description = "Regarding case", read_only = true }
+    # Writable so the portal can add a note to a case: sending `objectid: <caseId>`
+    # binds via objectid_incident → /incidents(id). entitySet derived from lookup_table.
+    objectid       = { type = "lookup", description = "Regarding case", lookup_table = "case", bind_field = "objectid_incident" }
     objecttypecode = { type = "string", description = "Regarding entity type", read_only = true }
     isdocument     = { type = "boolean", description = "Has attachment", read_only = true }
     createdon      = { type = "datetime", description = "Date created", read_only = true }
