@@ -30,7 +30,8 @@ resource "dataversecontact_table" "contact" {
 
   default_select = [
     "contactid", "fullname", "firstname", "lastname", "emailaddress1",
-    "jobtitle", "telephone1", "mobilephone", "address1_city",
+    "jobtitle", "department", "telephone1", "mobilephone",
+    "address1_line1", "address1_city", "address1_postalcode", "address1_country",
     "donotbulkemail", "createdon", "modifiedon",
   ]
 
@@ -74,6 +75,7 @@ resource "dataversecontact_table" "contact" {
     lastname            = { type = "string", description = "Last name" }
     emailaddress1       = { type = "string", description = "Primary email address" }
     jobtitle            = { type = "string", description = "Job title" }
+    department          = { type = "string", description = "Department" }
     telephone1          = { type = "string", description = "Business phone" }
     mobilephone         = { type = "string", description = "Mobile phone" }
     address1_line1      = { type = "string", description = "Address line 1" }
@@ -234,8 +236,9 @@ resource "dataversecontact_table" "quote" {
   filters = []
 
   default_select = [
-    "quoteid", "name", "quotenumber", "totalamount",
-    "statecode", "statuscode", "createdon", "modifiedon",
+    "quoteid", "name", "quotenumber", "totalamount", "description",
+    "effectivefrom", "effectiveto", "discountamount", "totaltax", "freightamount",
+    "opportunityid", "statecode", "statuscode", "createdon", "modifiedon",
   ]
 
   lookup_fields          = ["name", "quotenumber"]
@@ -266,12 +269,85 @@ resource "dataversecontact_table" "quote" {
     quotenumber   = { type = "string", description = "Quote number", read_only = true }
     totalamount   = { type = "number", description = "Total amount (£)", read_only = true }
     description   = { type = "string", description = "Notes" }
+    effectivefrom = { type = "datetime", description = "Valid from", read_only = true }
+    effectiveto   = { type = "datetime", description = "Valid until", read_only = true }
+    discountamount = { type = "number", description = "Discount (£)", read_only = true }
+    totaltax      = { type = "number", description = "Tax (£)", read_only = true }
+    freightamount = { type = "number", description = "Delivery/setup (£)", read_only = true }
     statecode     = { type = "choice", description = "Status (Draft/Active/Won/Closed)" }
     statuscode    = { type = "choice", description = "Status reason" }
     customerid    = { type = "lookup", description = "Customer (account)", read_only = true }
     opportunityid = { type = "lookup", description = "Source opportunity", lookup_table = "opportunity" }
     createdon     = { type = "datetime", description = "Date created", read_only = true }
     modifiedon    = { type = "datetime", description = "Date last modified", read_only = true }
+  }
+}
+
+# ── quotedetail (quote line items) ──────────────────────────────────────────
+# Read-only line items on a quote. A child of quote (like casenotes → case):
+# scoped through the parent quote, mirroring the quote route's joins one hop
+# deeper via quotedetail → quote.
+#   me   = lines on quotes on your opportunities (line → quote → opp → contact)
+#   team = lines on your company's quotes        (line → quote → account)
+resource "dataversecontact_table" "quotedetail" {
+  scope                  = var.scope
+  route_name             = "quotedetail"
+  description            = "Line items on a quote"
+  dataverse_table        = "quotedetails"
+  dataverse_logical_name = "quotedetail"
+  primary_key            = "quotedetailid"
+  # Share the quote permission group: anyone who can see a quote can see its
+  # lines — no separate quotedetail permission to grant or drift.
+  required_permission = "quote"
+  permission_group    = "quote"
+  filters             = []
+  aliases             = ["quotedetails", "quotelines", "quoteline"]
+
+  default_select = [
+    "quotedetailid", "productdescription", "priceperunit", "quantity",
+    "extendedamount", "quoteid", "createdon",
+  ]
+
+  lookup_fields          = ["productdescription"]
+  lookup_search_contains = ["productdescription"]
+
+  # me: line → its quote → the quote's opportunity → that opp's primary contact
+  contact_join_step {
+    table = "quotes"
+    from  = "quoteid"
+    key   = "quoteid"
+  }
+  contact_join_step {
+    table = "opportunities"
+    from  = "opportunityid"
+    key   = "opportunityid"
+  }
+  contact_join_step {
+    table = "contacts"
+    from  = "parentcontactid"
+    key   = "contactid"
+  }
+
+  # team: line → its quote → the quote's customer account
+  team_join_step {
+    table = "quotes"
+    from  = "quoteid"
+    key   = "quoteid"
+  }
+  team_join_step {
+    table = "accounts"
+    from  = "customerid_account"
+    key   = "accountid"
+  }
+
+  fields = {
+    quotedetailid      = { type = "string", description = "Unique line identifier", read_only = true }
+    productdescription = { type = "string", description = "Line item" }
+    priceperunit       = { type = "number", description = "Unit price (£)", read_only = true }
+    quantity           = { type = "number", description = "Quantity", read_only = true }
+    extendedamount     = { type = "number", description = "Line total (£)", read_only = true }
+    quoteid            = { type = "lookup", description = "Quote", lookup_table = "quote", read_only = true }
+    createdon          = { type = "datetime", description = "Date created", read_only = true }
   }
 }
 
@@ -436,7 +512,8 @@ resource "dataversecontact_table" "project" {
   aliases                = ["projects", "msdyn_projects"]
 
   default_select = [
-    "msdyn_projectid", "msdyn_subject", "msdyn_scheduledstart", "msdyn_finish",
+    "msdyn_projectid", "msdyn_subject", "msdyn_description",
+    "msdyn_scheduledstart", "msdyn_finish", "msdyn_actualstart", "msdyn_actualend",
     "statecode", "statuscode", "createdon", "modifiedon",
   ]
 
@@ -470,6 +547,8 @@ resource "dataversecontact_table" "project" {
     msdyn_description    = { type = "string", description = "Description" }
     msdyn_scheduledstart = { type = "datetime", description = "Scheduled start" }
     msdyn_finish         = { type = "datetime", description = "Scheduled finish" }
+    msdyn_actualstart    = { type = "datetime", description = "Actual start", read_only = true }
+    msdyn_actualend      = { type = "datetime", description = "Actual finish", read_only = true }
     msdyn_customer       = { type = "lookup", description = "Customer (account)", lookup_table = "account", read_only = true }
     statecode            = { type = "choice", description = "Status", read_only = true }
     statuscode           = { type = "choice", description = "Status reason", read_only = true }
@@ -500,9 +579,11 @@ resource "dataversecontact_table" "site" {
   # rows (null name), leaving just the real named sites.
   filters = ["name ne null"]
 
+  # NB: line3 deliberately excluded — it holds the [DEMO-RCPORTAL] seed marker.
   default_select = [
-    "customeraddressid", "name", "line1", "city", "postalcode",
-    "addresstypecode", "createdon",
+    "customeraddressid", "name", "line1", "line2", "city",
+    "stateorprovince", "postalcode", "country", "telephone1",
+    "latitude", "longitude", "addresstypecode", "createdon",
   ]
 
   lookup_fields          = ["name", "city"]
@@ -531,8 +612,14 @@ resource "dataversecontact_table" "site" {
     customeraddressid = { type = "string", description = "Unique site identifier", read_only = true }
     name              = { type = "string", description = "Site name" }
     line1             = { type = "string", description = "Address line 1" }
+    line2             = { type = "string", description = "Address line 2" }
     city              = { type = "string", description = "City" }
+    stateorprovince   = { type = "string", description = "County" }
     postalcode        = { type = "string", description = "Postcode" }
+    country           = { type = "string", description = "Country" }
+    telephone1        = { type = "string", description = "Site phone" }
+    latitude          = { type = "number", description = "Latitude", read_only = true }
+    longitude         = { type = "number", description = "Longitude", read_only = true }
     addresstypecode   = { type = "choice", description = "Address type" }
     createdon         = { type = "datetime", description = "Date created", read_only = true }
   }
@@ -666,6 +753,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
       dataversecontact_table.account.id,
       dataversecontact_table.opportunity.id,
       dataversecontact_table.quote.id,
+      dataversecontact_table.quotedetail.id,
       dataversecontact_table.project.id,
       dataversecontact_table.case.id,
       dataversecontact_table.casenotes.id,
@@ -680,6 +768,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     dataversecontact_table.account,
     dataversecontact_table.opportunity,
     dataversecontact_table.quote,
+    dataversecontact_table.quotedetail,
     dataversecontact_table.project,
     dataversecontact_table.case,
     dataversecontact_table.casenotes,
