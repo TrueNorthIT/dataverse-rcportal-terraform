@@ -290,9 +290,12 @@ resource "dataversecontact_table" "case" {
   filters                = ["statecode eq 0"]
   aliases                = ["cases", "incidents", "tickets"]
 
+  # `description` must be here: the single-record GET uses default_select (it
+  # ignores the client's ?select), so without it the case detail description
+  # came back empty even though the list showed it.
   default_select = [
     "incidentid", "title", "ticketnumber", "prioritycode",
-    "statecode", "statuscode", "createdon", "modifiedon",
+    "statecode", "statuscode", "description", "createdon", "modifiedon",
   ]
 
   lookup_fields          = ["title", "ticketnumber"]
