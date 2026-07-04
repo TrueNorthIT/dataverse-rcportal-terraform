@@ -592,8 +592,10 @@ resource "dataversecontact_table" "portalfeedback" {
     new_message          = { type = "string", description = "Feedback message" }
     new_category         = { type = "choice", description = "Category (Bug/Idea/Praise/Question/Other)" }
     new_rating           = { type = "number", description = "Rating 1–5" }
-    new_contactid        = { type = "lookup", description = "Submitted by", lookup_table = "contact", read_only = true }
-    new_accountid        = { type = "lookup", description = "Company", lookup_table = "account", read_only = true }
+    # bind_field = the schema-cased navigation property (not the logical name) —
+    # the @odata.bind on create must use new_ContactId / new_AccountId.
+    new_contactid        = { type = "lookup", description = "Submitted by", lookup_table = "contact", bind_field = "new_ContactId", read_only = true }
+    new_accountid        = { type = "lookup", description = "Company", lookup_table = "account", bind_field = "new_AccountId", read_only = true }
     createdon            = { type = "datetime", description = "Date created", read_only = true }
     modifiedon           = { type = "datetime", description = "Date last modified", read_only = true }
   }
