@@ -340,6 +340,77 @@ resource "dataversecontact_table" "case" {
   }
 }
 
+# ── casenotes (annotation) ──────────────────────────────────────────────────
+# The read-only notes/updates timeline on a support case. Restricted to notes
+# whose "regarding" record is an incident (objecttypecode). Scoped through the
+# parent case, mirroring the case route's joins:
+#   me   = notes on cases you raised   (note → incident → primarycontactid)
+#   team = notes on your company's cases (note → incident → customerid_account)
+resource "dataversecontact_table" "casenotes" {
+  scope                  = var.scope
+  route_name             = "casenotes"
+  description            = "Notes and updates on your support cases"
+  dataverse_table        = "annotations"
+  dataverse_logical_name = "annotation"
+  primary_key            = "annotationid"
+  # Notes are a child of the case: share the case's permission group so anyone
+  # who can see a case can see its notes — no separate casenotes permission to
+  # grant or drift. parent_table declares that relationship.
+  required_permission = "case"
+  permission_group    = "case"
+  filters             = ["objecttypecode eq 'incident'"]
+  aliases             = ["casenote", "notes"]
+
+  default_select = [
+    "annotationid", "subject", "notetext", "objectid",
+    "objecttypecode", "isdocument", "createdon", "modifiedon",
+  ]
+
+  lookup_fields          = ["subject"]
+  lookup_search_contains = ["subject"]
+
+  # me: note → its incident → the incident's primary contact
+  contact_join_step {
+    table = "incidents"
+    from  = "objectid_incident"
+    key   = "incidentid"
+  }
+  contact_join_step {
+    table = "contacts"
+    from  = "primarycontactid"
+    key   = "contactid"
+  }
+
+  # team: note → its incident → the incident's customer account
+  team_join_step {
+    table = "incidents"
+    from  = "objectid_incident"
+    key   = "incidentid"
+  }
+  team_join_step {
+    table = "accounts"
+    from  = "customerid_account"
+    key   = "accountid"
+  }
+
+  # A note's parent is the case, reached via the polymorphic objectid → incident.
+  parent_table {
+    table               = "case"
+    navigation_property = "objectid_incident"
+  }
+
+  fields = {
+    annotationid   = { type = "string", description = "Unique note identifier", read_only = true }
+    subject        = { type = "string", description = "Note subject" }
+    notetext       = { type = "string", description = "Note text" }
+    objectid       = { type = "lookup", description = "Regarding case", read_only = true }
+    objecttypecode = { type = "string", description = "Regarding entity type", read_only = true }
+    isdocument     = { type = "boolean", description = "Has attachment", read_only = true }
+    createdon      = { type = "datetime", description = "Date created", read_only = true }
+    modifiedon     = { type = "datetime", description = "Date last modified", read_only = true }
+  }
+}
+
 # ── project (msdyn_project) ─────────────────────────────────────────────────
 # Delivery projects (Project Operations). msdyn_project links only to the
 # customer *account* (msdyn_customer) — there is no project→contact field — so:
@@ -475,6 +546,8 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     quote       = ["me", "team"]                    # read-only (vendor-issued)
     project     = ["me", "team"]                    # read-only (delivery status)
     case        = ["me", "team", "write", "create"] # raise + view + update own tickets
+    # casenotes has no entry — it shares the `case` permission group (see the
+    # casenotes route's permission_group), so it inherits case's me/team access.
     site        = ["me", "team"]                    # read-only (locations)
   }
 
@@ -486,6 +559,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
       dataversecontact_table.quote.id,
       dataversecontact_table.project.id,
       dataversecontact_table.case.id,
+      dataversecontact_table.casenotes.id,
       dataversecontact_table.site.id,
     ]))
   }
@@ -497,6 +571,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     dataversecontact_table.quote,
     dataversecontact_table.project,
     dataversecontact_table.case,
+    dataversecontact_table.casenotes,
     dataversecontact_table.site,
   ]
 }
