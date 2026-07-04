@@ -538,6 +538,104 @@ resource "dataversecontact_table" "site" {
   }
 }
 
+# ── portalfeedback (new_portalfeedback, custom table) ───────────────────────
+# Customer feedback about the portal itself. Create-capable; the customer sees
+# their own (me) and their company's (team). Auto-binds contact + account on
+# create so the form only sends message/category/rating.
+resource "dataversecontact_table" "portalfeedback" {
+  scope                  = var.scope
+  route_name             = "portalfeedback"
+  description            = "Portal feedback — yours (me) and your company's (team)"
+  dataverse_table        = "new_portalfeedbacks"
+  dataverse_logical_name = "new_portalfeedback"
+  primary_key            = "new_portalfeedbackid"
+  required_permission    = "portalfeedback"
+  aliases                = ["feedback"]
+
+  default_select = [
+    "new_portalfeedbackid", "new_name", "new_message", "new_category",
+    "new_rating", "createdon", "modifiedon",
+  ]
+
+  lookup_fields          = ["new_name"]
+  lookup_search_contains = ["new_name"]
+
+  # me: feedback → the contact who submitted it
+  contact_join_step {
+    table = "contacts"
+    from  = "new_contactid"
+    key   = "contactid"
+  }
+
+  # team: feedback → the submitter's account
+  team_join_step {
+    table = "accounts"
+    from  = "new_accountid"
+    key   = "accountid"
+  }
+
+  # On create, bind the caller's own contact + account from the verified token.
+  create_default {
+    field      = "new_contactid"
+    bind_to    = "contact"
+    entity_set = "contacts"
+  }
+  create_default {
+    field      = "new_accountid"
+    bind_to    = "account"
+    entity_set = "accounts"
+  }
+
+  fields = {
+    new_portalfeedbackid = { type = "string", description = "Unique feedback identifier", read_only = true }
+    new_name             = { type = "string", description = "Summary" }
+    new_message          = { type = "string", description = "Feedback message" }
+    new_category         = { type = "choice", description = "Category (Bug/Idea/Praise/Question/Other)" }
+    new_rating           = { type = "number", description = "Rating 1–5" }
+    new_contactid        = { type = "lookup", description = "Submitted by", lookup_table = "contact", read_only = true }
+    new_accountid        = { type = "lookup", description = "Company", lookup_table = "account", read_only = true }
+    createdon            = { type = "datetime", description = "Date created", read_only = true }
+    modifiedon           = { type = "datetime", description = "Date last modified", read_only = true }
+  }
+}
+
+# ── knowledgearticle (D365 Knowledge Base) ──────────────────────────────────
+# Public, read-only self-service KB. Org-wide (no contact/account scoping);
+# public_read exposes it on the unauthenticated /public tier. Only published
+# articles (statecode 3). `content` is rich HTML rendered by the portal.
+resource "dataversecontact_table" "knowledgearticle" {
+  scope                  = var.scope
+  route_name             = "knowledgearticle"
+  description            = "Knowledge base articles (published)"
+  dataverse_table        = "knowledgearticles"
+  dataverse_logical_name = "knowledgearticle"
+  primary_key            = "knowledgearticleid"
+  required_permission    = "knowledgearticle"
+  public_read            = true
+  filters                = ["statecode eq 3"]
+  aliases                = ["kb", "knowledge"]
+
+  default_select = [
+    "knowledgearticleid", "title", "description", "content",
+    "articlepublicnumber", "keywords", "createdon", "modifiedon",
+  ]
+
+  lookup_fields          = ["title"]
+  lookup_search_contains = ["title"]
+
+  fields = {
+    knowledgearticleid  = { type = "string", description = "Unique article identifier", read_only = true }
+    title               = { type = "string", description = "Article title", read_only = true }
+    description         = { type = "string", description = "Short summary", read_only = true }
+    content             = { type = "string", description = "Article body (HTML)", read_only = true }
+    articlepublicnumber = { type = "string", description = "Public article number", read_only = true }
+    keywords            = { type = "string", description = "Keywords", read_only = true }
+    statecode           = { type = "choice", description = "Status", read_only = true }
+    createdon           = { type = "datetime", description = "Date created", read_only = true }
+    modifiedon          = { type = "datetime", description = "Date last modified", read_only = true }
+  }
+}
+
 # ── Permission sync ─────────────────────────────────────────────────────────
 # Customer self-service portal: the customer manages only their own identity
 # and raises support cases. Everything about Redcentric's sales/delivery
@@ -551,10 +649,13 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     opportunity = ["me", "team"]                    # read-only (vendor's pipeline)
     quote       = ["me", "team"]                    # read-only (vendor-issued)
     project     = ["me", "team"]                    # read-only (delivery status)
-    case        = ["me", "team", "write", "create"] # raise + view + update own tickets
+    case          = ["me", "team", "write", "create"] # raise + view + update own tickets
     # casenotes has no entry — it shares the `case` permission group (see the
     # casenotes route's permission_group), so it inherits case's me/team access.
-    site        = ["me", "team"]                    # read-only (locations)
+    site          = ["me", "team"]                    # read-only (locations)
+    portalfeedback = ["me", "team", "write", "create"] # submit + view own/company feedback
+    # knowledgearticle has no entry — public_read on the route governs access
+    # (unauthenticated /public tier), so no per-contact permission is needed.
   }
 
   triggers = {
@@ -567,6 +668,8 @@ resource "dataversecontact_permissions_sync" "rcportal" {
       dataversecontact_table.case.id,
       dataversecontact_table.casenotes.id,
       dataversecontact_table.site.id,
+      dataversecontact_table.portalfeedback.id,
+      dataversecontact_table.knowledgearticle.id,
     ]))
   }
 
@@ -579,5 +682,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     dataversecontact_table.case,
     dataversecontact_table.casenotes,
     dataversecontact_table.site,
+    dataversecontact_table.portalfeedback,
+    dataversecontact_table.knowledgearticle,
   ]
 }
