@@ -631,6 +631,74 @@ resource "dataversecontact_table" "projectnotes" {
   }
 }
 
+# ── projecttask (new_projecttask, custom) ───────────────────────────────────
+# The project delivery plan — phase bars + milestones as real rows in a custom
+# table (Project for the Web blocks msdyn_projecttask writes, so we model plan
+# items here). Read-only; scoped through the parent project like projectnotes.
+resource "dataversecontact_table" "projecttask" {
+  scope                  = var.scope
+  route_name             = "projecttask"
+  description            = "Delivery plan items (phases + milestones) for your projects"
+  dataverse_table        = "new_projecttasks"
+  dataverse_logical_name = "new_projecttask"
+  primary_key            = "new_projecttaskid"
+  required_permission    = "project"
+  permission_group       = "project"
+  filters                = []
+  aliases                = ["projecttasks", "planitems"]
+
+  default_select = [
+    "new_projecttaskid", "new_name", "new_startdate", "new_enddate",
+    "new_ismilestone", "new_percentcomplete", "new_sequence", "new_projectid", "createdon",
+  ]
+
+  lookup_fields          = ["new_name"]
+  lookup_search_contains = ["new_name"]
+
+  # me: task → its project → the project's customer account → its primary contact
+  contact_join_step {
+    table = "msdyn_projects"
+    from  = "new_projectid"
+    key   = "msdyn_projectid"
+  }
+  contact_join_step {
+    table = "accounts"
+    from  = "msdyn_customer"
+    key   = "accountid"
+  }
+  contact_join_step {
+    table = "contacts"
+    from  = "primarycontactid"
+    key   = "contactid"
+  }
+
+  # team: task → its project → the project's customer account
+  team_join_step {
+    table = "msdyn_projects"
+    from  = "new_projectid"
+    key   = "msdyn_projectid"
+  }
+  team_join_step {
+    table = "accounts"
+    from  = "msdyn_customer"
+    key   = "accountid"
+  }
+
+  fields = {
+    new_projecttaskid   = { type = "string", description = "Unique task identifier", read_only = true }
+    new_name            = { type = "string", description = "Task" }
+    new_startdate       = { type = "datetime", description = "Start date" }
+    new_enddate         = { type = "datetime", description = "End date" }
+    new_ismilestone     = { type = "boolean", description = "Is milestone" }
+    new_percentcomplete = { type = "number", description = "Percent complete" }
+    new_sequence        = { type = "number", description = "Sequence" }
+    # bind_field is the cased nav property the API auto-discovers for this
+    # single-relationship lookup; declared here so Terraform state converges.
+    new_projectid       = { type = "lookup", description = "Project", lookup_table = "project", bind_field = "new_ProjectId", read_only = true }
+    createdon           = { type = "datetime", description = "Date created", read_only = true }
+  }
+}
+
 # ── site (customeraddress) ──────────────────────────────────────────────────
 # Customer locations/premises. `site` (Field Service) is Microsoft-locked and
 # has no account link, so sites are modelled on customeraddress — the native
@@ -657,7 +725,7 @@ resource "dataversecontact_table" "site" {
   default_select = [
     "customeraddressid", "name", "line1", "line2", "city",
     "stateorprovince", "postalcode", "country", "telephone1",
-    "latitude", "longitude", "addresstypecode", "createdon",
+    "latitude", "longitude", "addresstypecode", "new_connectivitytype", "createdon",
   ]
 
   lookup_fields          = ["name", "city"]
@@ -692,10 +760,11 @@ resource "dataversecontact_table" "site" {
     postalcode        = { type = "string", description = "Postcode" }
     country           = { type = "string", description = "Country" }
     telephone1        = { type = "string", description = "Site phone" }
-    latitude          = { type = "number", description = "Latitude", read_only = true }
-    longitude         = { type = "number", description = "Longitude", read_only = true }
-    addresstypecode   = { type = "choice", description = "Address type" }
-    createdon         = { type = "datetime", description = "Date created", read_only = true }
+    latitude             = { type = "number", description = "Latitude", read_only = true }
+    longitude            = { type = "number", description = "Longitude", read_only = true }
+    addresstypecode      = { type = "choice", description = "Address type" }
+    new_connectivitytype = { type = "choice", description = "Connectivity type" }
+    createdon            = { type = "datetime", description = "Date created", read_only = true }
   }
 }
 
@@ -830,6 +899,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
       dataversecontact_table.quotedetail.id,
       dataversecontact_table.project.id,
       dataversecontact_table.projectnotes.id,
+      dataversecontact_table.projecttask.id,
       dataversecontact_table.case.id,
       dataversecontact_table.casenotes.id,
       dataversecontact_table.site.id,
@@ -846,6 +916,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     dataversecontact_table.quotedetail,
     dataversecontact_table.project,
     dataversecontact_table.projectnotes,
+    dataversecontact_table.projecttask,
     dataversecontact_table.case,
     dataversecontact_table.casenotes,
     dataversecontact_table.site,
