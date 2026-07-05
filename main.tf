@@ -658,7 +658,7 @@ resource "dataversecontact_table" "projecttask" {
   # me: task → its project → the project's customer account → its primary contact
   contact_join_step {
     table = "msdyn_projects"
-    from  = "new_projectid"
+    from  = "new_ProjectId"
     key   = "msdyn_projectid"
   }
   contact_join_step {
@@ -675,7 +675,7 @@ resource "dataversecontact_table" "projecttask" {
   # team: task → its project → the project's customer account
   team_join_step {
     table = "msdyn_projects"
-    from  = "new_projectid"
+    from  = "new_ProjectId"
     key   = "msdyn_projectid"
   }
   team_join_step {
