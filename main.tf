@@ -557,6 +557,80 @@ resource "dataversecontact_table" "project" {
   }
 }
 
+# ── projectnotes (annotation) ───────────────────────────────────────────────
+# The project delivery diary — annotations whose "regarding" record is a
+# project (objecttypecode). Scoped through the parent project, mirroring the
+# project route's joins one hop deeper via note → project:
+#   me   = notes on projects for the account you're the primary contact of
+#   team = notes on your company's projects
+# (Project for the Web blocks direct msdyn_projecttask writes, so the diary —
+# real, writable annotations — is how we surface genuine per-project updates.)
+resource "dataversecontact_table" "projectnotes" {
+  scope                  = var.scope
+  route_name             = "projectnotes"
+  description            = "Delivery notes/updates on your projects"
+  dataverse_table        = "annotations"
+  dataverse_logical_name = "annotation"
+  primary_key            = "annotationid"
+  required_permission    = "project"
+  permission_group       = "project"
+  filters                = ["objecttypecode eq 'msdyn_project'"]
+  aliases                = ["projectnote"]
+
+  default_select = [
+    "annotationid", "subject", "notetext", "objectid",
+    "objecttypecode", "createdon", "modifiedon",
+  ]
+
+  lookup_fields          = ["subject"]
+  lookup_search_contains = ["subject"]
+
+  # me: note → its project → the project's customer account → its primary contact
+  contact_join_step {
+    table = "msdyn_projects"
+    from  = "objectid_msdyn_project"
+    key   = "msdyn_projectid"
+  }
+  contact_join_step {
+    table = "accounts"
+    from  = "msdyn_customer"
+    key   = "accountid"
+  }
+  contact_join_step {
+    table = "contacts"
+    from  = "primarycontactid"
+    key   = "contactid"
+  }
+
+  # team: note → its project → the project's customer account
+  team_join_step {
+    table = "msdyn_projects"
+    from  = "objectid_msdyn_project"
+    key   = "msdyn_projectid"
+  }
+  team_join_step {
+    table = "accounts"
+    from  = "msdyn_customer"
+    key   = "accountid"
+  }
+
+  # A note's parent is the project, via the polymorphic objectid → msdyn_project.
+  parent_table {
+    table               = "project"
+    navigation_property = "objectid_msdyn_project"
+  }
+
+  fields = {
+    annotationid   = { type = "string", description = "Unique note identifier", read_only = true }
+    subject        = { type = "string", description = "Note subject" }
+    notetext       = { type = "string", description = "Note text" }
+    objectid       = { type = "lookup", description = "Regarding project", lookup_table = "project", bind_field = "objectid_msdyn_project" }
+    objecttypecode = { type = "string", description = "Regarding entity type", read_only = true }
+    createdon      = { type = "datetime", description = "Date created", read_only = true }
+    modifiedon     = { type = "datetime", description = "Date last modified", read_only = true }
+  }
+}
+
 # ── site (customeraddress) ──────────────────────────────────────────────────
 # Customer locations/premises. `site` (Field Service) is Microsoft-locked and
 # has no account link, so sites are modelled on customeraddress — the native
@@ -755,6 +829,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
       dataversecontact_table.quote.id,
       dataversecontact_table.quotedetail.id,
       dataversecontact_table.project.id,
+      dataversecontact_table.projectnotes.id,
       dataversecontact_table.case.id,
       dataversecontact_table.casenotes.id,
       dataversecontact_table.site.id,
@@ -770,6 +845,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     dataversecontact_table.quote,
     dataversecontact_table.quotedetail,
     dataversecontact_table.project,
+    dataversecontact_table.projectnotes,
     dataversecontact_table.case,
     dataversecontact_table.casenotes,
     dataversecontact_table.site,
