@@ -890,6 +890,18 @@ resource "dataversecontact_permissions_sync" "rcportal" {
     # (unauthenticated /public tier), so no per-contact permission is needed.
   }
 
+  # Signed-in users with no contact yet may provision their own via
+  # POST /me/register (email always taken from the verified token).
+  allow_self_register = true
+
+  # Domain-based company auto-linking: uncomment once the email-domain column
+  # exists on account in Dataverse (it cannot be added right now). Enabling it
+  # early is harmless — the API fail-opens and registers contacts unlinked —
+  # but it costs a failing Dataverse query + warning on every registration.
+  # self_register_auto_link = {
+  #   account_field = "tn_emaildomains"
+  # }
+
   triggers = {
     tables_hash = sha256(join(",", [
       dataversecontact_table.contact.id,
