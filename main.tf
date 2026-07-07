@@ -881,7 +881,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
 
   # (1) How we resolve which companies a person is a member of. Redcentric's
   # customers are one Dataverse contact per company (the classic model).
-  company_model {
+  company_model = {
     strategy = "parent-account"
   }
 
@@ -890,7 +890,7 @@ resource "dataversecontact_permissions_sync" "rcportal" {
   # domain(s) plus truenorthit.co.uk (so TrueNorth staff can join any). With
   # require_match, someone whose domain is on no company is blocked from signing
   # up at all (the UI shows "not a member of any trusted domain").
-  join {
+  join = {
     strategy      = "domain-list"
     domain_field  = "new_portaldomains"
     require_match = true
