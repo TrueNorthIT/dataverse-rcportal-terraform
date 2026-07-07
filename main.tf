@@ -875,6 +875,11 @@ resource "dataversecontact_table" "knowledgearticle" {
 resource "dataversecontact_permissions_sync" "rcportal" {
   scope = var.scope
 
+  # Let a signed-in user with no contact yet self-provision one via
+  # POST /me/register (the portal's "join" screen). They may only link to
+  # companies on their own verified email domain (enforced server-side).
+  allow_self_register = true
+
   default_permissions = {
     contact     = ["me", "team", "write"]           # edit own profile; read colleagues
     account     = ["me", "team"]                    # read-only
