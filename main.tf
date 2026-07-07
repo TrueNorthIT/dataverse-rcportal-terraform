@@ -876,9 +876,25 @@ resource "dataversecontact_permissions_sync" "rcportal" {
   scope = var.scope
 
   # Let a signed-in user with no contact yet self-provision one via
-  # POST /me/register (the portal's "join" screen). They may only link to
-  # companies on their own verified email domain (enforced server-side).
+  # POST /me/register (the portal's "join" screen).
   allow_self_register = true
+
+  # (1) How we resolve which companies a person is a member of. Redcentric's
+  # customers are one Dataverse contact per company (the classic model).
+  company_model {
+    strategy = "parent-account"
+  }
+
+  # (2)+(3)+(4) How a new user may JOIN: match their verified email domain
+  # against each company's `new_portaldomains` list. A company lists its own
+  # domain(s) plus truenorthit.co.uk (so TrueNorth staff can join any). With
+  # require_match, someone whose domain is on no company is blocked from signing
+  # up at all (the UI shows "not a member of any trusted domain").
+  join {
+    strategy      = "domain-list"
+    domain_field  = "new_portaldomains"
+    require_match = true
+  }
 
   default_permissions = {
     contact     = ["me", "team", "write"]           # edit own profile; read colleagues
