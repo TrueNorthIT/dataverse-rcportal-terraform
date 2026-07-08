@@ -173,8 +173,11 @@ resource "dataversecontact_table" "opportunity" {
   dataverse_logical_name = "opportunity"
   primary_key            = "opportunityid"
   required_permission    = "opportunity"
-  filters                = ["statecode eq 0"]
-  aliases                = ["opportunities", "opps"]
+  # Show opportunities in every state (Open/Won/Lost), not just Open — the
+  # portal's status pills do the filtering, and a customer should see the
+  # outcome of past deals too (mirrors the quote route's all-states fix).
+  filters = []
+  aliases = ["opportunities", "opps"]
 
   default_select = [
     "opportunityid", "name", "estimatedvalue", "estimatedclosedate",
