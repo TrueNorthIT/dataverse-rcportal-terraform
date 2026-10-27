@@ -380,6 +380,11 @@ resource "dataversecontact_table" "case" {
   lookup_fields          = ["title", "ticketnumber"]
   lookup_search_contains = ["title", "ticketnumber"]
 
+  # Log the case number with every request that touches a case (or a note,
+  # document or action on it), so App Insights can be searched for the number
+  # a citizen quotes. Needs Contact API 1.40.0+ and a provider with `reference`.
+  reference = "ticketnumber"
+
   # me: case → its primary contact
   contact_join_step {
     table = "contacts"
