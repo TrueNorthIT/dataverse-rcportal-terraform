@@ -69,11 +69,14 @@ resource "dataversecontact_table" "contact" {
   }
 
   fields = {
+    # emailaddress1 is the sign-in key: the API matches the token's email to it,
+    # so it is read-only. Registration still sets it — from the verified token,
+    # server-side — and a changed sign-in address is a staff job.
     contactid           = { type = "string", description = "Unique contact identifier", read_only = true }
     fullname            = { type = "string", description = "Full name", read_only = true }
     firstname           = { type = "string", description = "First name" }
     lastname            = { type = "string", description = "Last name" }
-    emailaddress1       = { type = "string", description = "Primary email address" }
+    emailaddress1       = { type = "string", description = "Primary email address", read_only = true }
     jobtitle            = { type = "string", description = "Job title" }
     department          = { type = "string", description = "Department" }
     telephone1          = { type = "string", description = "Business phone" }
